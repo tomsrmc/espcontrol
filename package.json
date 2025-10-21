@@ -2,18 +2,13 @@
   "name": "controller",
   "version": "1.0.0",
   "type": "module",
-  "description": "Johnny-Five controller for ESP32 over WiFi Firmata",
+  "description": "Simple CLI to call an ESP32 REST API",
   "bin": {
     "esp32": "./index.js"
   },
   "scripts": {
     "start": "node index.js",
-    "blink": "node index.js blink",
-    "discover": "node index.js discover",
-    "led": "node index.js led"
-  },
-  "dependencies": {
-    "johnny-five": "^2.1.0",
-    "etherport-client": "^0.1.4"
+    "health": "node index.js health",
+    "run": "node index.js run '{\"job\":\"blink\",\"strength\":3}'"
   }
 }
