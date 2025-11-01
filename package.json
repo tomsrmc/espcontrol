@@ -9,6 +9,6 @@
   "scripts": {
     "start": "node index.js",
     "health": "node index.js health",
-    "run": "node index.js run '{\"job\":\"blink\",\"strength\":3}'"
+    "blink": "node index.js run '{\"job\":\"blink\",\"strength\":3}'"
   }
 }
