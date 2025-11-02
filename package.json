@@ -9,7 +9,6 @@
   "scripts": {
     "start": "node index.js",
     "health": "node index.js health",
-    "blink": "node index.js run '{\"job\":\"blink\",\"strength\":3}'",
     "wsblink": "node index.js wsblink",
     "wsstatus": "node index.js wsstatus"
   },

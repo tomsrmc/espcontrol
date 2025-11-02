@@ -13,6 +13,7 @@ export const sendCommand = async (host, command, params = {}, { timeoutMs = 5000
     }, timeoutMs)
 
     let commandSent = false
+    let sendTimestamp = null
 
     ws.on('error', (err) => {
       clearTimeout(timeout)
@@ -22,7 +23,8 @@ export const sendCommand = async (host, command, params = {}, { timeoutMs = 5000
     ws.on('open', () => {
       // Wait a tiny bit before sending command to ensure we're ready
       setTimeout(() => {
-        const message = JSON.stringify({ command, ...params })
+        sendTimestamp = Date.now()
+        const message = JSON.stringify({ command, timestamp: sendTimestamp, ...params })
         ws.send(message)
         commandSent = true
       }, 50)
@@ -35,6 +37,11 @@ export const sendCommand = async (host, command, params = {}, { timeoutMs = 5000
         // Skip the welcome message, wait for actual command response
         if (response.type === 'connected') {
           return
+        }
+        
+        // Add round-trip time calculation
+        if (sendTimestamp) {
+          response.roundTripMs = Date.now() - sendTimestamp
         }
         
         clearTimeout(timeout)
