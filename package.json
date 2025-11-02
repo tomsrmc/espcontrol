@@ -9,6 +9,11 @@
   "scripts": {
     "start": "node index.js",
     "health": "node index.js health",
-    "blink": "node index.js run '{\"job\":\"blink\",\"strength\":3}'"
+    "blink": "node index.js run '{\"job\":\"blink\",\"strength\":3}'",
+    "wsblink": "node index.js wsblink",
+    "wsstatus": "node index.js wsstatus"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
   }
 }
