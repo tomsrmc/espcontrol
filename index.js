@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { health } from './esp32-client.js'
 import { blinkLed, getStatus } from './esp32-ws-client.js'
+import { ESP32WebSocketClient } from './esp32-persistent-client.js'
 import { resolveHostOnce } from './esp32-resolver.js'
 
 const args = process.argv.slice(2)
@@ -71,9 +72,17 @@ const main = async () => {
   }
 
   if (cmd === 'wsstatus') {
-    const res = await getStatus(resolvedHost, { timeoutMs })
-    console.log('WebSocket response:')
-    console.log(JSON.stringify(res, null, 2))
+    const client = new ESP32WebSocketClient(resolvedHost)
+    try {
+      await client.connect()
+      const res = await client.getStatus({ timeoutMs })
+      console.log('WebSocket response:')
+      console.log(JSON.stringify(res, null, 2))
+      client.disconnect()
+    } catch (err) {
+      client.disconnect()
+      throw err
+    }
     return
   }
 

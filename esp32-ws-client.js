@@ -12,7 +12,6 @@ export const sendCommand = async (host, command, params = {}, { timeoutMs = 5000
       reject(new Error(`WebSocket timeout after ${timeoutMs}ms`))
     }, timeoutMs)
 
-    let commandSent = false
     let sendTimestamp = null
 
     ws.on('error', (err) => {
@@ -20,22 +19,16 @@ export const sendCommand = async (host, command, params = {}, { timeoutMs = 5000
       reject(err)
     })
 
-    ws.on('open', () => {
-      // Wait a tiny bit before sending command to ensure we're ready
-      setTimeout(() => {
-        sendTimestamp = Date.now()
-        const message = JSON.stringify({ command, timestamp: sendTimestamp, ...params })
-        ws.send(message)
-        commandSent = true
-      }, 50)
-    })
-
     ws.on('message', (data) => {
       try {
         const response = JSON.parse(data.toString())
         
-        // Skip the welcome message, wait for actual command response
+        // Skip welcome message, wait for actual command response
         if (response.type === 'connected') {
+          // Send command after receiving welcome
+          sendTimestamp = Date.now()
+          const message = JSON.stringify({ command, ...params })
+          ws.send(message)
           return
         }
         
