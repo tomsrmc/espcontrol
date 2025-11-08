@@ -9,8 +9,9 @@
   "scripts": {
     "start": "node index.js",
     "health": "node index.js health",
-    "wsblink": "node index.js wsblink",
-    "wsstatus": "node index.js wsstatus"
+    "blink": "node index.js wsblink",
+    "wsstatus": "node index.js wsstatus",
+    "step": "node index.js stepper_jog"
   },
   "dependencies": {
     "ws": "^8.18.3"
