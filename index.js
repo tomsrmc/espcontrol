@@ -99,7 +99,8 @@ const main = async () => {
   if (cmd === 'stepper_jog') {
     // Default delta: 160 (2mm if 80 steps/mm)
     const delta = Number(wsParams.delta || 160);
-    const res = await sendCommand(resolvedHost, 'stepper_jog', { delta }, { timeoutMs });
+    const speed = Number(wsParams.speed || 800);
+    const res = await sendCommand(resolvedHost, 'stepper_jog', { delta, speed }, { timeoutMs });
     console.log('WebSocket response:');
     console.log(JSON.stringify(res, null, 2));
     process.exit(0);
