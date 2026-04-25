@@ -7,8 +7,10 @@ export class ESP32WebSocketClient {
     this.port = port
     this.ws = null
     this.isConnected = false
+    this.welcomeMessage = null
     this.nextRequestId = 1
     this.pendingRequests = new Map() // id -> { resolve, reject, sendTime }
+    this.listeners = new Map()
     this.reconnectDelay = 1000
     this.shouldReconnect = false
   }
@@ -47,7 +49,9 @@ export class ESP32WebSocketClient {
           // Handle welcome message
           if (response.type === 'connected') {
             this.isConnected = true
+            this.welcomeMessage = response
             clearTimeout(timeout)
+            this.emit('connected', response)
             resolve()
             return
           }
@@ -80,6 +84,8 @@ export class ESP32WebSocketClient {
 
   handleDisconnect() {
     this.isConnected = false
+    this.welcomeMessage = null
+    this.emit('disconnected', { host: this.host, port: this.port })
     
     // Reject all pending requests
     for (const [id, { reject }] of this.pendingRequests) {
@@ -90,6 +96,7 @@ export class ESP32WebSocketClient {
     // Auto-reconnect if desired
     if (this.shouldReconnect) {
       console.log(`Reconnecting in ${this.reconnectDelay}ms...`)
+      this.emit('reconnecting', { host: this.host, port: this.port, delayMs: this.reconnectDelay })
       setTimeout(() => {
         if (this.shouldReconnect) {
           this.connect().catch(err => {
@@ -101,8 +108,39 @@ export class ESP32WebSocketClient {
   }
 
   handleServerMessage(message) {
-    // Override this method to handle unsolicited messages from server
+    if (message?.type === 'event' && message?.event) {
+      this.emit(message.event, message)
+    }
+    this.emit('message', message)
     console.log('Server message:', message)
+  }
+
+  on(eventName, handler) {
+    const handlers = this.listeners.get(eventName) ?? new Set()
+    handlers.add(handler)
+    this.listeners.set(eventName, handlers)
+    return () => this.off(eventName, handler)
+  }
+
+  off(eventName, handler) {
+    const handlers = this.listeners.get(eventName)
+    if (!handlers) {
+      return
+    }
+    handlers.delete(handler)
+    if (handlers.size === 0) {
+      this.listeners.delete(eventName)
+    }
+  }
+
+  emit(eventName, payload) {
+    const handlers = this.listeners.get(eventName)
+    if (!handlers) {
+      return
+    }
+    for (const handler of handlers) {
+      handler(payload)
+    }
   }
 
   sendCommand(command, params = {}, timeoutMs = 5000) {
@@ -153,6 +191,10 @@ export class ESP32WebSocketClient {
 
   async getStatus({ timeoutMs = 5000 } = {}) {
     return this.sendCommand('status', {}, timeoutMs)
+  }
+
+  async getCapabilities({ timeoutMs = 5000 } = {}) {
+    return this.sendCommand('capabilities', {}, timeoutMs)
   }
 
   disconnect() {

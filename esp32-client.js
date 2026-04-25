@@ -57,6 +57,36 @@ export const stepperJog = async (host, params = {}, { timeoutMs } = {}) => {
   return postJson(url, params, { timeoutMs })
 }
 
+export const getStepperStatus = async (host, { timeoutMs } = {}) => {
+  const base = makeBaseUrl(host)
+  const url = `${base}/stepper/status`
+  return fetchJson(url, { method: 'GET', timeoutMs })
+}
+
+export const stopStepper = async (host, params = {}, { timeoutMs } = {}) => {
+  const base = makeBaseUrl(host)
+  const url = `${base}/stepper/stop`
+  return postJson(url, params, { timeoutMs })
+}
+
+export const getStepperConfig = async (host, { timeoutMs } = {}) => {
+  const base = makeBaseUrl(host)
+  const url = `${base}/stepper/config`
+  return fetchJson(url, { method: 'GET', timeoutMs })
+}
+
+export const setStepperConfig = async (host, params = {}, { timeoutMs } = {}) => {
+  const base = makeBaseUrl(host)
+  const url = `${base}/stepper/config`
+  return postJson(url, params, { timeoutMs })
+}
+
+export const getCapabilities = async (host, { timeoutMs } = {}) => {
+  const base = makeBaseUrl(host)
+  const url = `${base}/system/capabilities`
+  return fetchJson(url, { method: 'GET', timeoutMs })
+}
+
 export const runAction = async (host, token, payload, { timeoutMs, includeTokenQuery = false } = {}) => {
   const base = makeBaseUrl(host)
   const url = new URL(`${base}/run`)

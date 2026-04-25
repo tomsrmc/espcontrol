@@ -5,9 +5,12 @@ Node.js controller/client for the ESP32 firmware in the companion `esp` project.
 This project is the host-side half of the system. It provides:
 
 - a CLI for common device operations
+- a local server mode for browser and app clients
 - reusable modules for HTTP and WebSocket access
 - hostname resolution for `.local` devices
 - a persistent WebSocket client for long-lived UI sessions
+- a motor domain client that hides raw protocol commands behind a stable host-side API
+- a shared device registry with persistence and background host refresh
 
 For the specific controller board, driver, actuator, and setup requirements used with this client, see `../esp/HARDWARE.md` in the companion firmware project.
 
@@ -19,13 +22,18 @@ In practice, this project acts as a control adapter between a UI and the device 
 
 - the ESP32 exposes REST and WebSocket APIs
 - `espcontrol` connects to those APIs
-- your UI calls the exported helpers or wraps them in its own state layer
+- your UI can call the exported helpers directly or talk to the built-in host service over HTTP and WebSocket
 
 ## What is in this project
 
 ### CLI entry point
 
 - `index.js` — command-line interface published as `esp32`
+
+### Server foundation
+
+- `server.js` — local HTTP and WebSocket bridge for UI clients
+- `device-registry.js` — shared device state, persistence, discovery refresh, and command orchestration
 
 ### HTTP helper
 
@@ -35,6 +43,10 @@ In practice, this project acts as a control adapter between a UI and the device 
 
 - `esp32-ws-client.js` — one-shot WebSocket command helper
 - `esp32-persistent-client.js` — reusable persistent client with request tracking and auto-reconnect
+
+### Motor domain client
+
+- `motor-client.js` — stable motor API for `jog`, `getStatus`, `stop`, `setMotionConfig`, `getMotionConfig`, and event subscription
 
 ### Discovery helper
 
@@ -62,6 +74,7 @@ npm install
 - package type: ES modules
 - CLI binary: `esp32`
 - external dependency: `ws`
+- persisted device config: `.espcontrol-devices.json`
 
 ## Quick start
 
@@ -94,6 +107,167 @@ node index.js wsstatus --host esp32.local
 ```bash
 node index.js stepper_jog --delta 160 --speed 800 --host esp32.local
 ```
+
+### Read live stepper state
+
+```bash
+node index.js stepper_status --host esp32.local
+```
+
+### Stop motion immediately
+
+```bash
+node index.js stepper_stop --host esp32.local
+```
+
+### Update runtime motion config
+
+```bash
+node index.js stepper_config --speed 1200 --acceleration 900 --host esp32.local
+```
+
+### Inspect firmware capabilities
+
+```bash
+node index.js capabilities --host esp32.local
+```
+
+### Start the local control server
+
+```bash
+npm run server
+```
+
+By default the server listens on `127.0.0.1:4010` and persists registered devices to `.espcontrol-devices.json` in the project folder.
+
+## Motor protocol model
+
+The firmware now exposes a versioned single-axis motor contract. `espcontrol` keeps transport details here, and higher layers should depend on the host-side motor client instead of raw command names.
+
+Key properties of the current contract:
+
+- request/response correlation through WebSocket `id`
+- a shared response envelope with `status`, `code`, `message`, `id`, and `data`
+- capability discovery at connect time and through the `capabilities` command
+- unsolicited lifecycle events for `stepper.started`, `stepper.completed`, `stepper.stopped`, and `stepper.fault`
+- runtime tuning through `stepper_config` while firmware still enforces safe min/max bounds
+
+The new host service builds on that same contract and rebroadcasts device state changes to browser or app clients through a single local WebSocket.
+
+## Server mode
+
+Run the service with:
+
+```bash
+node index.js server --server-host 127.0.0.1 --port 4010
+```
+
+Environment variables:
+
+- `ESP32_SERVER_HOST`
+- `ESP32_SERVER_PORT`
+- `ESP32_CONFIG_PATH`
+
+### What the server does
+
+- keeps a registry of known ESP32 devices by `id` and `host`
+- persists that registry to `.espcontrol-devices.json`
+- refreshes known `.local` host resolutions in the background
+- opens one persistent WebSocket per connected device when you request WebSocket-backed control
+- exposes a local HTTP API for browser, desktop, or Next.js server-side callers
+- exposes a local WebSocket bridge at `/ws` that broadcasts registry and motion events
+
+### HTTP API
+
+Base URL example:
+
+```text
+http://127.0.0.1:4010
+```
+
+Core routes:
+
+- `GET /health` — host service health and known device summary
+- `GET /devices` — list registered devices and cached state
+- `POST /devices` — register a device with `{ "id": "bench", "host": "esp32.local", "autoConnect": true }`
+- `GET /devices/:id` — get one device snapshot
+- `DELETE /devices/:id` — remove a device from the registry
+- `POST /devices/:id/connect` — open the persistent device WebSocket
+- `POST /devices/:id/disconnect` — close the persistent device WebSocket
+- `GET /devices/:id/health` — run the firmware `/health` check
+- `GET /devices/:id/system` — fetch firmware system info
+- `GET /devices/:id/capabilities` — fetch or reuse firmware capability data
+- `GET /devices/:id/motion/status` — read live motion state
+- `POST /devices/:id/motion/jog` — enqueue motion with `{ "delta": 160, "speed": 800 }`
+- `POST /devices/:id/motion/stop` — stop motion with `{ "immediate": true }`
+- `GET /devices/:id/motion/config` — read motion config
+- `POST /devices/:id/motion/config` — update motion config with `{ "maxSpeed": 1200, "acceleration": 900 }`
+
+The motion routes accept `transport=ws` or `transport=http`. WebSocket is the default for the host service because it supports request correlation and broadcast events.
+
+### HTTP API example
+
+Register a device and auto-connect it:
+
+```bash
+curl -X POST http://127.0.0.1:4010/devices \
+  -H "Content-Type: application/json" \
+  -d '{"id":"bench","host":"esp32.local","autoConnect":true}'
+```
+
+Jog the axis through the host server:
+
+```bash
+curl -X POST http://127.0.0.1:4010/devices/bench/motion/jog \
+  -H "Content-Type: application/json" \
+  -d '{"delta":160,"speed":800}'
+```
+
+### WebSocket bridge
+
+Connect UI clients to:
+
+```text
+ws://127.0.0.1:4010/ws
+```
+
+The server sends an initial snapshot with all known devices, then broadcasts updates such as `device.connected`, `device.event`, `device.command`, and `device.health` whenever local state changes.
+
+Client messages use a small command envelope:
+
+```json
+{
+  "requestId": 1,
+  "action": "command",
+  "deviceId": "bench",
+  "command": "motion.jog",
+  "params": {
+    "delta": 160,
+    "speed": 800
+  }
+}
+```
+
+Supported WebSocket actions:
+
+- `subscribe`
+- `listDevices`
+- `command`
+
+Supported WebSocket commands:
+
+- `registerDevice`
+- `removeDevice`
+- `connect`
+- `disconnect`
+- `health`
+- `system`
+- `capabilities`
+- `motion.status`
+- `motion.jog`
+- `motion.stop`
+- `motion.config.get`
+- `motion.config.set`
 
 ## CLI usage
 
@@ -143,6 +317,32 @@ Example:
 esp32 stepper_jog --delta 160 --speed 800 --host esp32.local
 ```
 
+#### `stepper_status`
+
+Reads the current stepper status over the shared motor protocol.
+
+#### `stepper_stop`
+
+Stops active motion. Use `--no-immediate` to request a controlled stop instead of the default immediate stop.
+
+#### `stepper_config`
+
+Without flags, reads the current motion config and safety limits. With `--speed` and/or `--acceleration`, updates runtime motion config over WebSocket.
+
+#### `capabilities`
+
+Prints the capability handshake and current protocol limits seen by the host.
+
+#### `server`
+
+Starts the local HTTP and WebSocket bridge.
+
+Example:
+
+```bash
+esp32 server --server-host 127.0.0.1 --port 4010
+```
+
 #### `step_pulse`
 
 Removed legacy command. The CLI now prints a message directing callers to `stepper_jog` or `wsblink`.
@@ -159,6 +359,12 @@ Defaults:
 - host: `esp32.local`
 - timeout: `5000`
 
+#### Server flags
+
+- `--server-host <host>`
+- `--port <port>`
+- `--config <path>`
+
 #### Blink flags
 
 - `--times <n>`
@@ -169,6 +375,9 @@ Defaults:
 
 - `--delta <steps>`
 - `--speed <stepsPerSecond>`
+- `--acceleration <stepsPerSecondSquared>`
+- `--immediate`
+- `--no-immediate`
 
 ### Environment variables
 
@@ -383,6 +592,8 @@ new ESP32WebSocketClient(host, port = 81)
 - pending request tracking
 - per-command timeouts
 - unsolicited server message hook
+- connection handshake capture
+- event subscription with `on()` and `off()`
 - auto-reconnect after disconnect
 
 #### Main methods
@@ -403,6 +614,10 @@ Wrapper for `sendCommand('blink', ...)`.
 
 Wrapper for `sendCommand('status', ...)`.
 
+##### `getCapabilities(options)`
+
+Wrapper for `sendCommand('capabilities', ...)`.
+
 ##### `disconnect()`
 
 Closes the connection and disables reconnect.
@@ -411,7 +626,7 @@ For commands without a convenience wrapper, call `sendCommand()` directly.
 
 #### Extending for UI use
 
-The class includes `handleServerMessage(message)`, which can be overridden to process unsolicited messages from the ESP32 if the firmware later starts sending broadcast JSON messages.
+The class includes `handleServerMessage(message)` and event listeners via `on(eventName, handler)`, so UIs can react to broadcast lifecycle events without parsing raw sockets in every view.
 
 Example:
 
@@ -450,6 +665,27 @@ Creates an HTTP keep-alive agent. It is exported but not currently used by the s
 ## Using this project from a UI
 
 The cleanest approach is to import the modules into your local app layer and keep all ESP-specific transport logic here.
+
+If you are building a browser UI or a Next.js app, prefer talking to the local server mode from your app server or route handlers so the browser never needs to open raw sockets to the ESP32 directly.
+
+### Example: use the motor domain client
+
+```js
+import { ESP32MotorClient } from './motor-client.js'
+
+const motor = new ESP32MotorClient('esp32.local')
+await motor.connect()
+
+const unsubscribe = motor.onMotionEvent(event => {
+  console.log('motion event', event.event, event.data?.stepper)
+})
+
+await motor.setMotionConfig({ maxSpeed: 1200, acceleration: 900 })
+await motor.jog({ delta: 160 })
+
+unsubscribe()
+motor.disconnect()
+```
 
 ### Example: fetch device info over REST
 
@@ -564,8 +800,8 @@ Use a newer Node.js release, preferably `18+`.
 
 If this project is going to back a UI, the next improvements are:
 
-- add dedicated stepper convenience wrappers for the persistent client
-- define shared command schemas between UI and firmware
-- add device discovery/status refresh logic
-- add completion/progress handling for long-running device actions
-- add authentication if the device will operate on a less trusted network
+- move the host service and clients to TypeScript
+- define shared Zod schemas for the host API, bridge messages, and firmware envelopes
+- add a Next.js App Router frontend that talks to this local service instead of the ESP32 directly
+- add Auth.js and role-based command authorization before exposing the service beyond localhost
+- persist historical device and job records in MongoDB once you need audit trails or multi-user coordination

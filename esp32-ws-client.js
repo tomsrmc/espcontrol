@@ -60,3 +60,26 @@ export const blinkLed = async (host, { onMs = 50, offMs = 50, times = 10, timeou
 export const getStatus = async (host, { timeoutMs = 5000 } = {}) => {
   return sendCommand(host, 'status', {}, { timeoutMs })
 }
+
+export const stepperJog = async (host, { delta = 160, speed = 800, timeoutMs = 5000 } = {}) => {
+  return sendCommand(host, 'stepper_jog', { delta, speed }, { timeoutMs })
+}
+
+export const getStepperStatus = async (host, { timeoutMs = 5000 } = {}) => {
+  return sendCommand(host, 'stepper_status', {}, { timeoutMs })
+}
+
+export const stopStepper = async (host, { immediate = true, timeoutMs = 5000 } = {}) => {
+  return sendCommand(host, 'stepper_stop', { immediate }, { timeoutMs })
+}
+
+export const setStepperConfig = async (host, { maxSpeed, acceleration, timeoutMs = 5000 } = {}) => {
+  const params = {}
+  if (maxSpeed !== undefined) params.maxSpeed = maxSpeed
+  if (acceleration !== undefined) params.acceleration = acceleration
+  return sendCommand(host, 'stepper_config', params, { timeoutMs })
+}
+
+export const getCapabilities = async (host, { timeoutMs = 5000 } = {}) => {
+  return sendCommand(host, 'capabilities', {}, { timeoutMs })
+}

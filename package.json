@@ -8,6 +8,7 @@
   },
   "scripts": {
     "start": "node index.js",
+    "server": "node index.js server",
     "health": "node index.js health",
     "blink": "node index.js wsblink",
     "wsstatus": "node index.js wsstatus",
