@@ -7,7 +7,7 @@
     "esp32": "./index.js"
   },
   "scripts": {
-    "start": "node index.js",
+    "start": "node index.js server",
     "server": "node index.js server",
     "health": "node index.js health",
     "blink": "node index.js wsblink",

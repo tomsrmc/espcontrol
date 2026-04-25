@@ -80,6 +80,7 @@ Examples:
 Env vars:
   ESP32_HOST=esp32.local ESP32_TIMEOUT_MS=8000 esp32 wsblink
   ESP32_SERVER_HOST=127.0.0.1 ESP32_SERVER_PORT=4010 esp32 server
+  ESP32_DEVICE_ID=esp32 ESP32_AUTO_CONNECT=true npm start
 `)
 }
 

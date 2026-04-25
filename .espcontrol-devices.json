@@ -1,0 +1,9 @@
+{
+  "devices": [
+    {
+      "id": "esp32",
+      "host": "esp32.local",
+      "autoConnect": true
+    }
+  ]
+}

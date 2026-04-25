@@ -138,7 +138,17 @@ node index.js capabilities --host esp32.local
 npm run server
 ```
 
+`npm start` now launches the bridge in server mode as well.
+
 By default the server listens on `127.0.0.1:4010` and persists registered devices to `.espcontrol-devices.json` in the project folder.
+
+When the persisted registry is empty, the bridge now bootstraps a default device automatically from the known firmware configuration:
+
+- device id: `esp32` by default, or the current firmware mDNS hostname
+- host: `esp32.local` by default, or `http://<ESP32_HOST>` if `ESP32_HOST` is set
+- auto-connect: enabled by default so the bridge will attach to the ESP on startup when reachable
+
+The bootstrap device is derived from `../esp/src/config/secrets.h` when available, specifically `MDNS_HOSTNAME`, with environment-variable overrides.
 
 ## Motor protocol model
 
@@ -167,6 +177,12 @@ Environment variables:
 - `ESP32_SERVER_HOST`
 - `ESP32_SERVER_PORT`
 - `ESP32_CONFIG_PATH`
+- `ESP32_DEVICE_ID`
+- `ESP32_AUTO_CONNECT`
+- `ESP32_BOOTSTRAP_DEVICE`
+- `ESP32_FIRMWARE_SECRETS_PATH`
+- `ESP32_MDNS_HOSTNAME`
+- `ESP32_HOST`
 
 ### What the server does
 

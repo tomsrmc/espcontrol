@@ -15,6 +15,7 @@ import {
 import { ESP32MotorClient } from './motor-client.js'
 import { ESP32WebSocketClient } from './esp32-persistent-client.js'
 import { resolveHostOnce } from './esp32-resolver.js'
+import { getKnownBridgeDefaults } from './bridge-defaults.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -63,6 +64,8 @@ export class DeviceRegistry extends EventEmitter {
         throw error
       }
     }
+
+    await this.#ensureBootstrappedDevice()
 
     this.isLoaded = true
     return this.listDevices()
@@ -343,6 +346,33 @@ export class DeviceRegistry extends EventEmitter {
       })),
     }
     await writeFile(this.configPath, JSON.stringify(payload, null, 2))
+  }
+
+  async #ensureBootstrappedDevice() {
+    if (this.devices.size > 0) {
+      return
+    }
+
+    const defaults = await getKnownBridgeDefaults()
+    if (!defaults?.device) {
+      return
+    }
+
+    const record = this.#createRecord(defaults.device)
+    this.devices.set(record.id, record)
+
+    try {
+      await this.#refreshResolution(record)
+      record.lastError = null
+    } catch (error) {
+      record.lastError = error.message
+    }
+
+    await this.save()
+    this.#emitUpdate('device.registered', record, {
+      bootstrap: true,
+      firmware: defaults.firmware,
+    })
   }
 
   #createRecord({ id, host, autoConnect = false }) {
