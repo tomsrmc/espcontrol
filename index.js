@@ -3,6 +3,8 @@ import readline from 'node:readline'
 import process from 'node:process'
 import { health, getSystemInfo, blinkLedRest, stepperJog } from './esp32-client.js'
 import { resolveHostOnce } from './esp32-resolver.js'
+import { blinkLed, sendCommand } from './esp32-ws-client.js'
+import { ESP32WebSocketClient } from './esp32-persistent-client.js'
 
 const args = process.argv.slice(2)
 
